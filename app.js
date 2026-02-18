@@ -33,7 +33,7 @@ function getApiKey() {
   return localStorage.getItem("gsd-api-key") || "";
 }
 function getModel() {
-  return localStorage.getItem("gsd-model") || "claude-sonnet-4-6-20250514";
+  return localStorage.getItem("gsd-model") || "claude-sonnet-4-6";
 }
 
 $("#open-settings").addEventListener("click", () => {

@@ -1,5 +1,3 @@
-import type { Context, Config } from "@netlify/functions";
-
 const SYSTEM_PROMPT = `You are GSD Planner — an AI that helps users plan software projects for execution with Claude Code's GSD (Get Stuff Done) workflow.
 
 ## Your Job
@@ -221,7 +219,7 @@ None yet.
 - config.json depth should match the project scope: "quick" (3-5 phases), "standard" (5-8), "comprehensive" (8-12).
 - Today's date is ${new Date().toISOString().split('T')[0]}.`;
 
-export default async (req: Request, context: Context) => {
+export default async (req, context) => {
   if (req.method !== "POST") {
     return new Response("Method not allowed", { status: 405 });
   }
@@ -251,7 +249,7 @@ export default async (req: Request, context: Context) => {
       "anthropic-version": "2023-06-01",
     },
     body: JSON.stringify({
-      model: model || "claude-sonnet-4-6-20250514",
+      model: model || "claude-sonnet-4-6",
       max_tokens: 16000,
       system: SYSTEM_PROMPT,
       messages,
@@ -276,6 +274,6 @@ export default async (req: Request, context: Context) => {
   });
 };
 
-export const config: Config = {
+export const config = {
   path: "/api/chat",
 };
