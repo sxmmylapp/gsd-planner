@@ -35,10 +35,14 @@ function getApiKey() {
 function getModel() {
   return localStorage.getItem("gsd-model") || "claude-sonnet-4-6";
 }
+function getMode() {
+  return localStorage.getItem("gsd-mode") || "gsd";
+}
 
 $("#open-settings").addEventListener("click", () => {
   $("#api-key-input").value = getApiKey();
   $("#model-select").value = getModel();
+  $("#mode-select").value = getMode();
   showScreen(settingsScreen);
 });
 
@@ -47,8 +51,10 @@ $("#settings-back").addEventListener("click", () => showScreen(homeScreen));
 $("#save-settings").addEventListener("click", () => {
   const key = $("#api-key-input").value.trim();
   const model = $("#model-select").value;
+  const mode = $("#mode-select").value;
   if (key) localStorage.setItem("gsd-api-key", key);
   localStorage.setItem("gsd-model", model);
+  localStorage.setItem("gsd-mode", mode);
   showToast("Settings saved");
   showScreen(homeScreen);
 });
@@ -71,7 +77,7 @@ function renderHome() {
       <h3>${escapeHtml(s.name || "Untitled Project")}</h3>
       <div class="card-desc">${escapeHtml(s.description || "No description yet")}</div>
       <div class="card-meta">
-        <span>${s.messages.filter((m) => m.role === "user").length} messages</span>
+        <span>${s.mode === "plan-md" ? "PLAN.MD" : "GSD"} · ${s.messages.filter((m) => m.role === "user").length} messages</span>
         <span>${timeAgo(s.updatedAt)}</span>
       </div>
     </div>`
@@ -104,6 +110,7 @@ function createSession() {
     id: Date.now().toString(36),
     name: "",
     description: "",
+    mode: getMode(),
     messages: [],
     createdAt: Date.now(),
     updatedAt: Date.now(),
@@ -123,6 +130,8 @@ function openSession(index) {
   }
   currentSession = sessions[index];
   $("#chat-title").textContent = currentSession.name || "New Project";
+  const mode = currentSession.mode || getMode();
+  $("#mode-badge").textContent = mode === "gsd" ? "GSD" : "PLAN.MD";
   renderMessages();
   showScreen(chatScreen);
   if (currentSession.messages.length === 0) {
@@ -176,12 +185,15 @@ function appendAssistantChunk(chunk) {
 }
 
 function renderDownloadCard(files) {
-  const fileNames = Object.keys(files).map((f) => `  ${f}`).join("\n");
+  const fileNames = Object.keys(files);
+  const isSingle = fileNames.length === 1;
+  const title = isSingle ? "Plan File Ready" : "Planning Files Ready";
+  const btnLabel = isSingle ? "Download plan.md" : "Download .zip";
   return `
     <div class="download-card">
-      <h4>GSD Planning Files Ready</h4>
-      <div class="file-list">${escapeHtml(fileNames)}</div>
-      <button onclick="downloadGsdFiles()">Download .zip</button>
+      <h4>${title}</h4>
+      <div class="file-list">${fileNames.map((f) => `  ${escapeHtml(f)}`).join("\n")}</div>
+      <button onclick="downloadGsdFiles()">${btnLabel}</button>
     </div>`;
 }
 
@@ -213,6 +225,7 @@ async function sendMessage(text) {
         messages: apiMessages,
         apiKey: getApiKey(),
         model: getModel(),
+        mode: currentSession.mode || getMode(),
       }),
     });
 
@@ -305,6 +318,7 @@ async function sendInitialGreeting() {
         messages: [{ role: "user", content: "Hi, I want to plan a new project." }],
         apiKey: getApiKey(),
         model: getModel(),
+        mode: currentSession.mode || getMode(),
       }),
     });
 
@@ -357,15 +371,29 @@ async function sendInitialGreeting() {
 
 // ===== File Extraction =====
 function extractGsdFiles(text) {
-  const regex = /```json:gsd-files\s*\n([\s\S]*?)\n```/;
-  const match = text.match(regex);
-  if (!match) return null;
-  try {
-    const parsed = JSON.parse(match[1]);
-    return parsed.files || null;
-  } catch {
-    return null;
+  // Try GSD format
+  const gsdRegex = /```json:gsd-files\s*\n([\s\S]*?)\n```/;
+  const gsdMatch = text.match(gsdRegex);
+  if (gsdMatch) {
+    try {
+      const parsed = JSON.parse(gsdMatch[1]);
+      return parsed.files || null;
+    } catch {
+      return null;
+    }
   }
+  // Try plan.md format
+  const planRegex = /```json:plan-file\s*\n([\s\S]*?)\n```/;
+  const planMatch = text.match(planRegex);
+  if (planMatch) {
+    try {
+      const parsed = JSON.parse(planMatch[1]);
+      return parsed.files || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }
 
 // ===== Download =====
@@ -376,30 +404,35 @@ window.downloadGsdFiles = async function () {
     return;
   }
 
-  const zip = new JSZip();
-  for (const [path, content] of Object.entries(files)) {
-    zip.file(path, content);
-  }
-
-  const blob = await zip.generateAsync({ type: "blob" });
+  const entries = Object.entries(files);
   const name = (currentSession.name || "project").replace(/[^a-z0-9]/gi, "-").toLowerCase();
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${name}-gsd-plan.zip`;
-  a.click();
-  URL.revokeObjectURL(url);
+
+  if (entries.length === 1) {
+    // Single file — download directly
+    const [filename, content] = entries[0];
+    const blob = new Blob([content], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.split("/").pop();
+    a.click();
+    URL.revokeObjectURL(url);
+  } else {
+    // Multiple files — zip
+    const zip = new JSZip();
+    for (const [path, content] of entries) {
+      zip.file(path, content);
+    }
+    const blob = await zip.generateAsync({ type: "blob" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${name}-gsd-plan.zip`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
   showToast("Downloaded!");
 };
-
-// ===== Generate Button =====
-$("#generate-btn").addEventListener("click", () => {
-  if (streaming) return;
-  userInput.value = "Please generate the GSD planning files now.";
-  sendMessage(userInput.value);
-  userInput.value = "";
-  autoResizeInput();
-});
 
 // ===== Input Handling =====
 userInput.addEventListener("input", () => {
@@ -460,8 +493,8 @@ function escapeHtml(str) {
 }
 
 function renderMarkdown(text) {
-  // Strip out the JSON:gsd-files block for display
-  let clean = text.replace(/```json:gsd-files\s*\n[\s\S]*?\n```/g, "");
+  // Strip out file output blocks for display
+  let clean = text.replace(/```json:(?:gsd-files|plan-file)\s*\n[\s\S]*?\n```/g, "");
 
   // Basic markdown rendering
   return clean

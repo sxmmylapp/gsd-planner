@@ -37,6 +37,14 @@
           <input type="password" id="api-key-input" placeholder="sk-ant-...">
         </div>
         <div class="field">
+          <label for="mode-select">Planning Mode</label>
+          <p class="hint">GSD generates a full .planning/ directory. Plan.md generates a single detailed file.</p>
+          <select id="mode-select" style="width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:inherit;">
+            <option value="gsd">GSD (Full .planning/ directory)</option>
+            <option value="plan-md">Plan.md (Single detailed file)</option>
+          </select>
+        </div>
+        <div class="field">
           <label for="model-select">Model</label>
           <p class="hint">Sonnet is fast and capable. Opus is slower but more thorough.</p>
           <select id="model-select" style="width:100%;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-sm);color:var(--text);font-size:16px;font-family:inherit;">
@@ -54,9 +62,7 @@
       <header class="chat-header">
         <button class="icon-btn" id="chat-back">&larr;</button>
         <span class="chat-title" id="chat-title">New Project</span>
-        <div class="header-actions">
-          <button class="icon-btn" id="generate-btn" title="Generate files">&#x2913;</button>
-        </div>
+        <span class="mode-badge" id="mode-badge">GSD</span>
       </header>
       <div class="messages" id="messages">
         <div class="typing" id="typing">
